@@ -1,0 +1,110 @@
+/* Includes ------------------------------------------------------------------*/
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+#include "stm32l4xx_hal.h"
+#include "app.h"
+/* Private define ------------------------------------------------------------*/
+#define LED_PORT GPIOA
+#define LED_PIN GPIO_PIN_5
+#define LED_MODE_OFF 0
+#define LED_MODE_ON 1
+#define LED_MODE_FLASHING 2
+#define PWM_DUTYCYCLE_MAX 100
+#define PWM_DUTYCYCLE_MIN 0
+#define PWM_DUTYCYCLE_STEP 5
+/* Private function prototypes -----------------------------------------------*/
+void ShowCommands(void);
+void UART_TransmitString(UART_HandleTypeDef *p_huart, char a_string[], int newline);
+void PWM_SetDutyCycle(float dutyCycle);
+/* Extern global variables ---------------------------------------------------------*/
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+extern UART_HandleTypeDef huart2;
+//Should be declared as volatile if variables' values are changed in ISR.
+volatile char rxData; //One byte data received from UART
+volatile int ledMode = LED_MODE_FLASHING;
+volatile float pwmDutyCycle = 50.0;
+void App_Init(void) {
+HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+UART_TransmitString(&huart2, "-----------------", 1);
+UART_TransmitString(&huart2, "~ Nucleo-L476RG ~", 1);
+UART_TransmitString(&huart2, "-----------------", 1);
+ShowCommands();
+HAL_TIM_Base_Start_IT(&htim3);
+HAL_UART_Receive_IT(&huart2, (uint8_t*) &rxData, 1); //Start the Rx interrupt.
+HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+PWM_SetDutyCycle(pwmDutyCycle);
+}
+void App_MainLoop(void) {
+}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *p_htim) {
+if (p_htim == &htim3) {
+if (ledMode == LED_MODE_FLASHING) {
+HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
+}
+}
+}
+void PWM_SetDutyCycle(float dutyCycle) {
+uint16_t periodValue, compareValue, compareNewValue;
+periodValue = __HAL_TIM_GET_AUTORELOAD(&htim2);
+compareValue = periodValue * dutyCycle /100.0;
+__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, compareValue);
+compareNewValue = periodValue * (100 - dutyCycle) /100.0;
+__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, compareNewValue);
+}
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *p_huart) {
+//Process the data received from UART.
+switch (rxData) {
+case 'I':
+case 'i':
+HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+ledMode = LED_MODE_ON;
+break;
+case 'O':
+case 'o':
+HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+ledMode = LED_MODE_OFF;
+break;
+case 'F':
+case 'f':
+ledMode = LED_MODE_FLASHING;
+break;
+case 'H':
+case 'h':
+ShowCommands();
+break;
+case 'P':
+case 'p':
+pwmDutyCycle += PWM_DUTYCYCLE_STEP;
+if (pwmDutyCycle > PWM_DUTYCYCLE_MAX) {
+pwmDutyCycle = PWM_DUTYCYCLE_MAX;
+}
+PWM_SetDutyCycle(pwmDutyCycle);
+break;
+case 'M':
+case 'm':
+pwmDutyCycle -= PWM_DUTYCYCLE_STEP;
+if (pwmDutyCycle < PWM_DUTYCYCLE_MIN) {
+pwmDutyCycle = PWM_DUTYCYCLE_MIN;
+}
+PWM_SetDutyCycle(pwmDutyCycle);
+break;
+}
+HAL_UART_Receive_IT(p_huart, (uint8_t*) &rxData, 1); //Restart the Rx interrupt.
+}
+void ShowCommands(void) {
+UART_TransmitString(&huart2, "Type on keyboard to send command from PC to MCU:",
+1);
+UART_TransmitString(&huart2, "> I: turn on LED, O: turn off LED, F: flashing LED, H: show
+commands", 1);
+UART_TransmitString(&huart2, "> P: increase PWM duty cycle, M: decrease PWM duty
+cycle", 1);
+}
+void UART_TransmitString(UART_HandleTypeDef *p_huart, char a_string[], int newline) {
+HAL_UART_Transmit(p_huart, (uint8_t*) a_string, strlen(a_string), HAL_MAX_DELAY);
+if (newline != 0) {
+HAL_UART_Transmit(p_huart, (uint8_t*) "\n\r", 2, HAL_MAX_DELAY);
+}
+}
