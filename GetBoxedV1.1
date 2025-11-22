@@ -47,6 +47,8 @@ volatile int led2State = LED_STATE_OFF;
 volatile int led3State = LED_STATE_OFF;
 
 void App_Init(void) {
+/*
+// If we want an intro message or instructions
 	HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
 
 	UART_TransmitString(&huart2, "-----------------", 1);
@@ -54,7 +56,7 @@ void App_Init(void) {
 	UART_TransmitString(&huart2, "-----------------", 1);
 
 	ShowCommands();
-
+*/
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_UART_Receive_IT(&huart2, (uint8_t*) &rxData, 1); //Start the Rx interrupt.
 	HAL_ADC_Start_IT(&hadc1);
@@ -135,11 +137,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *p_huart) {
 	HAL_UART_Receive_IT(p_huart, (uint8_t*) &rxData, 1); //Restart the Rx interrupt.
 }
 
+/*
+// If we wanted callable intructions
 void ShowCommands(void) {
 	UART_TransmitString(&huart2, "Type on keyboard to send command from PC to MCU:", 1);
 	UART_TransmitString(&huart2, "> I: turn on LED, O: turn off LED, F: flashing LED, H: show commands", 1);
 	UART_TransmitString(&huart2, "> S: sample ADC", 1);
 }
+*/
 
 void UART_TransmitString(UART_HandleTypeDef *p_huart, char a_string[], int newline) {
 	HAL_UART_Transmit(p_huart, (uint8_t*) a_string, strlen(a_string), HAL_MAX_DELAY);
