@@ -1,0 +1,68 @@
+/*
+ * app.gproj.c
+ *
+ *  Created on: Nov 22, 2025
+ *      Author: Owner
+ */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include <stdio.h>
+#include <string.h>
+/* Private define ------------------------------------------------------------*/
+#define LED_PORT GPIOA
+#define LED_PIN  GPIO_PIN_5
+#define STATE_CALM   0
+#define STATE_THREAT 1
+/* Private variables ---------------------------------------------------------*/
+extern TIM_HandleTypeDef htim2;
+extern UART_HandleTypeDef huart2;
+extern ADC_HandleTypeDef hadc1;
+/* Private function prototypes -----------------------------------------------*/
+void UART_TransmitString(UART_HandleTypeDef *p_huart, const char *str) {
+    HAL_UART_Transmit(p_huart, (uint8_t*)str, strlen(str), HAL_MAX_DELAY);
+}
+void App_MainLoop(void) {
+}
+
+void App_Init(void) {
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+
+    UART_TransmitString(&huart2, " Light Monitor\r\n");
+    UART_TransmitString(&huart2, "System starting...\r\n");
+
+    // Start timer interrupt
+    HAL_TIM_Base_Start_IT(&htim2);
+}
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance != TIM2) return;
+
+    static int lastState = -1;
+    uint32_t adcValue = 0;
+    float voltage_mV = 0;
+
+    // Read in ADC
+    HAL_ADC_Start(&hadc1);
+    if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+        adcValue = HAL_ADC_GetValue(&hadc1);
+        voltage_mV = ((float)adcValue) * 3300.0f / 4095.0f; // convert ADC value to mV
+    }
+    HAL_ADC_Stop(&hadc1);
+
+    // Determine states using mV conversion
+    int state = (voltage_mV > 500.0f) ? STATE_THREAT : STATE_CALM;
+
+    // Only update if state changed
+    if (state != lastState) {
+        lastState = state;
+// PuTTy output (can switch to LEDs as well)
+    if (state == STATE_THREAT) {
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+    UART_TransmitString(&huart2, "WARNING: THREAT PERCEIVED, PLEASE SECURE ITEM \r\n");
+    } else {
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+    UART_TransmitString(&huart2, "STATE: CALM, PROCEED ACCORDINGLY\r\n");
+        }
+    }
+
+}
